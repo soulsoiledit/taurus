@@ -236,7 +236,6 @@ impl Session {
     pub fn send_command(name: &str, message: &str) {
         let _ = Command::new("tmux")
             .args(["send-keys", "-t", name, message, "Enter"])
-            .kill_on_drop(true)
             .spawn();
     }
 }
