@@ -82,7 +82,8 @@ pub async fn run() {
 
     if SESSIONS.read().await.len() > 0 {
         tokio::spawn(async move {
-            let parse_pattern = Regex::new(r"^\[\d{2}:\d{2}:\d{2}\] \[Server thread/INFO\]: (<.*|[\w §]+ (joined|left) the game)$").unwrap();
+            let parse_pattern =
+                Regex::new(r"^\[\d{2}:\d{2}:\d{2}\] \[Server thread/INFO\]: (.*)$").unwrap();
             let bridges = BRIDGES.clone();
             loop {
                 tokio::time::sleep(Duration::from_millis(333)).await;
