@@ -99,8 +99,7 @@ impl Sys {
         if *ldavg < 0.0 {
             return (0.0, 0.0);
         }
-        let corec_ = sys.physical_core_count().unwrap();
-        let corec = if corec_ == 0 { 1 } else { 0 };
+        let mut corec = sys.physical_core_count().unwrap();
         (*ldavg as f32, *ldavg as f32 / corec as f32)
     }
 
