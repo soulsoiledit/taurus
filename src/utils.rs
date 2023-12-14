@@ -85,7 +85,7 @@ impl Sys {
 
     pub(crate) fn sys_health_check(&self) -> bool {
         let ram = self.ram;
-        if ram.0 as f64 / ram.1 as f64 > 0.85
+        if (self.sys.available_memory() as f64 / ram.1 as f64) < 0.15
             || self.cpu_avg.1 > 0.8
             || Self::check_disk(&self.sys).is_none()
         {
