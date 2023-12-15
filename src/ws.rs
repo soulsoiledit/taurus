@@ -382,7 +382,8 @@ async fn handle_response(message: &str) -> Option<String> {
 
             info!("shell cmd {command}");
             let args = args.unwrap_or(&[]);
-            let _ = Command::new(command).args(args).kill_on_drop(true).spawn();
+            info!("shell cmd {command} {args:?}");
+            let _ = Command::new(command).args(args).spawn();
             None
         }
         "HEARTBEAT" => Some(format!("HEARTBEAT {}", Sys::new().sys_health_check())),
