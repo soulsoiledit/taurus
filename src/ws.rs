@@ -45,7 +45,7 @@ pub(crate) async fn client_connection(ws: WebSocket, clients: Clients) {
             warn!("error sending websocket msg: {e}");
         }
     }));
-    let uuid = Uuid::new_v4().to_simple().to_string();
+    let uuid = Uuid::new_v4().simple().to_string();
     let new_client = WsClient {
         sender: Some(client_sender),
         authed: false,

@@ -14,11 +14,13 @@ use crate::{
 use bridge::{gen_pipe, replace_formatting, set_lines, update_messages};
 use config::Config;
 use log::{error, info};
-use notify::{watcher, RecursiveMode, Watcher};
+use notify::{event::ModifyKind, EventKind, RecursiveMode};
+use notify_debouncer_full::{new_debouncer, DebouncedEvent};
 use regex::Regex;
 use std::{
     collections::HashMap,
     convert::Infallible,
+    path::Path,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -109,14 +111,22 @@ pub async fn run() {
 
         tokio::spawn(async move {
             let (tx, rx) = std::sync::mpsc::channel();
-            let mut watcher = watcher(tx, Duration::from_secs(5)).unwrap();
-            watcher.watch(&*PATH, RecursiveMode::Recursive).unwrap();
+            let mut watcher = new_debouncer(Duration::from_secs(5), None, tx).unwrap();
+            watcher
+                .watch(Path::new(&*PATH), RecursiveMode::Recursive)
+                .unwrap();
             loop {
                 // Send cannot be sent unless the event is dropped, so we must wait until an event
                 // happens then reload the config and continue
-                while let Ok(notify::DebouncedEvent::Write(_)) = rx.recv() {}
-                *SESSIONS.write().await = Config::load_sessions(PATH.to_owned());
-                *CONFIG.write().await = Config::load_config(PATH.to_owned());
+                if let Ok(Ok(events)) = rx.recv() {
+                    for event in events {
+                        if matches!(event.kind, EventKind::Modify(_)) {
+                            *SESSIONS.write().await = Config::load_sessions(PATH.to_owned());
+                            *CONFIG.write().await = Config::load_config(PATH.to_owned());
+                            break;
+                        }
+                    }
+                }
             }
         });
 

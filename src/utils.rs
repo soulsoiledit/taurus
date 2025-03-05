@@ -2,7 +2,7 @@ use serde::{Serialize, Serializer};
 use serde_derive::Serialize;
 use std::fmt;
 use std::{collections::HashMap, sync::Arc};
-use sysinfo::{DiskExt, System, SystemExt};
+use sysinfo::{Disks, System};
 use tokio::sync::{mpsc, Mutex};
 use warp::{ws::Message, Rejection};
 
@@ -35,6 +35,7 @@ pub(crate) struct Sys {
     cpu_avg: (f32, f32),
     ram: (u64, u64),
     uptime: u64,
+    disks: Disks,
     sys: System,
 }
 
@@ -63,31 +64,35 @@ impl Into<SysDisplay> for Sys {
 impl Sys {
     pub(crate) fn new() -> Self {
         let mut sys = System::new_all();
+        let mut disks = Disks::new_with_refreshed_list();
         sys.refresh_all();
         Self {
-            disk: Self::check_disk(&sys),
-            disk_info: Self::disk_info(&sys),
+            disk: Self::check_disk(&disks),
+            disk_info: Self::disk_info(&disks),
             cpu_avg: Self::cpu_average(&sys),
             ram: Self::get_ram(&sys),
-            uptime: Self::uptime(&sys),
+            uptime: Self::uptime(),
+            disks,
             sys,
         }
     }
 
     pub(crate) fn refresh(&mut self) {
         let sys = &mut self.sys;
+        let disks = &mut self.disks;
         sys.refresh_all();
-        self.disk = Self::check_disk(sys);
-        self.disk_info = Self::disk_info(sys);
+        disks.refresh(true);
+        self.disk = Self::check_disk(disks);
+        self.disk_info = Self::disk_info(disks);
         self.cpu_avg = Self::cpu_average(sys);
-        self.uptime = Self::uptime(sys);
+        self.uptime = Self::uptime();
     }
 
     pub(crate) fn sys_health_check(&self) -> bool {
         let ram = self.ram;
         if ram.0 as f64 / ram.1 as f64 > 0.85
             || self.cpu_avg.1 > 0.8
-            || Self::check_disk(&self.sys).is_some()
+            || Self::check_disk(&self.disks).is_some()
         {
             return true;
         }
@@ -95,7 +100,7 @@ impl Sys {
     }
 
     fn cpu_average(sys: &System) -> (f32, f32) {
-        let ldavg = &sys.load_average().five;
+        let ldavg = &System::load_average().five;
         if *ldavg < 0.0 {
             return (0.0, 0.0);
         }
@@ -103,8 +108,8 @@ impl Sys {
         (*ldavg as f32, *ldavg as f32 / corec as f32)
     }
 
-    fn uptime(sys: &System) -> u64 {
-        sys.uptime()
+    fn uptime() -> u64 {
+        System::uptime()
     }
 
     fn get_ram(sys: &System) -> (u64, u64) {
@@ -115,8 +120,8 @@ impl Sys {
         (num as f32 / 1073.7) as u64
     }
 
-    fn check_disk(sys: &System) -> Option<u8> {
-        for (i, disk) in sys.disks().iter().enumerate() {
+    fn check_disk(disks: &Disks) -> Option<u8> {
+        for (i, disk) in disks.iter().enumerate() {
             if disk.total_space() < 10737418240 {
                 continue;
             }
@@ -127,9 +132,9 @@ impl Sys {
         None
     }
 
-    fn disk_info(sys: &System) -> Vec<(u64, u64, f32)> {
+    fn disk_info(disks: &Disks) -> Vec<(u64, u64, f32)> {
         let mut response: Vec<(u64, u64, f32)> = Vec::new();
-        for disk in sys.disks() {
+        for disk in disks.list() {
             let total = disk.total_space();
             if total < 10737418240 || disk.is_removable() {
                 continue;
