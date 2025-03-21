@@ -7,10 +7,10 @@ use crate::{
 use futures::{FutureExt, StreamExt};
 use log::{info, warn};
 use serde_json::json;
-use std::env;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::{env, str::from_utf8};
+use std::{path::PathBuf, str::Utf8Error};
 use tokio::sync::RwLock;
 use tokio::{fs::remove_file, sync::Mutex};
 use tokio::{process::Command, sync::mpsc};
@@ -305,7 +305,7 @@ async fn handle_response(message: &str) -> Option<String> {
                     };
                 }
             }
-            Some(format!("RCON {response}"))
+            Some(format!("RCON [{target}] {response}"))
         }
         "CP_STRUCTURE" => {
             let (_, args) = match get_cmd(message) {
@@ -383,8 +383,20 @@ async fn handle_response(message: &str) -> Option<String> {
             info!("shell cmd {command}");
             let args = args.unwrap_or(&[]);
             info!("shell cmd {command} {args:?}");
-            let _ = Command::new(command).args(args).spawn();
-            None
+            let output = Command::new(command)
+                .args(args)
+                .output()
+                .await
+                .expect("failed")
+                .stdout;
+            info!("{output:?}");
+            match from_utf8(&output) {
+                Ok(response) => {
+                    info!("{response}");
+                    Some(format!("SHELL {response}"))
+                }
+                Err(_) => None,
+            }
         }
         "HEARTBEAT" => Some(format!("HEARTBEAT {}", Sys::new().sys_health_check())),
         "CHECK" => {
